@@ -4,456 +4,704 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weak Leg Rehab — System Architecture</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Noto+Sans+Thai:wght@400;600;700&family=Oxanium:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg: #080c12;
+    --surface: #0d1321;
+    --surface2: #111827;
+    --border: rgba(255,255,255,0.06);
+    --hw: #00e5a0;
+    --hw-dim: rgba(0,229,160,0.15);
+    --mw: #b06aff;
+    --mw-dim: rgba(176,106,255,0.15);
+    --bk: #ff6b4a;
+    --bk-dim: rgba(255,107,74,0.15);
+    --emg: #ff2b2b;
+    --emg-dim: rgba(255,43,43,0.15);
+    --text: #e8edf5;
+    --text-dim: #5a6478;
+    --yellow: #ffd166;
+    --blue: #4fc3f7;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  
   body {
-    background: #0d1117;
-    font-family: 'Sarabun', sans-serif;
-    color: #e6edf3;
+    background: var(--bg);
+    font-family: 'Noto Sans Thai', sans-serif;
+    color: var(--text);
     overflow-x: hidden;
-    transition: background-color 0.3s;
-  }
-  .page {
-    width: 100%;
     min-height: 100vh;
-    position: relative;
-    padding: 30px 20px 60px;
-  }
-  /* Grid Background */
-  .page::before {
-    content:'';
-    position:fixed; inset:0;
-    background-image:
-      linear-gradient(rgba(48,54,61,0.5) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(48,54,61,0.5) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events:none;
-    z-index:0;
-  }
-  h1 {
-    text-align:center; font-size:clamp(18px, 2.5vw, 26px); font-weight:700;
-    color:#fff; position:relative; z-index:2; margin-bottom:4px;
-  }
-  .subtitle {
-    text-align:center; font-family:'Share Tech Mono',monospace; font-size:12px;
-    color:#8b949e; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px;
-    position:relative; z-index:2;
   }
 
-  /* ─── CANVAS AREA ─── */
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 999;
+  }
+
+  /* ── ANIMATED GRID BG ── */
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  }
+  .grid-bg::before {
+    content: '';
+    position: absolute; inset: -50%;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridDrift 30s linear infinite;
+  }
+  @keyframes gridDrift { to { transform: translate(60px, 60px); } }
+
+  /* ── GLOWING ORBS ── */
+  .orb {
+    position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0;
+  }
+  .orb-1 { width: 500px; height: 500px; background: rgba(0,229,160,0.04); top: -100px; left: -100px; animation: orbFloat1 20s ease-in-out infinite alternate; }
+  .orb-2 { width: 600px; height: 600px; background: rgba(176,106,255,0.04); bottom: -200px; right: -200px; animation: orbFloat2 25s ease-in-out infinite alternate; }
+  @keyframes orbFloat1 { to { transform: translate(100px, 200px); } }
+  @keyframes orbFloat2 { to { transform: translate(-100px, -150px); } }
+
+  /* ── PAGE LAYOUT ── */
+  .page {
+    position: relative; z-index: 1;
+    padding: 30px 20px 50px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 100px; padding: 5px 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--hw);
+    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+  }
+  .header-badge .dot { width: 6px; height: 6px; background: var(--hw); border-radius: 50%; animation: blinkLed 1.5s infinite; }
+  h1 {
+    font-family: 'Oxanium', sans-serif;
+    font-size: clamp(20px, 3vw, 32px);
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+  h1 span { color: var(--hw); }
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text-dim); letter-spacing: 3px;
+    text-transform: uppercase; margin-top: 6px;
+  }
+
+  /* ── CANVAS WRAP ── */
   .canvas-wrap {
-    max-width: 1600px;
+    max-width: 1640px;
     margin: 0 auto;
     position: relative;
-    z-index: 2;
-    border: 1px solid rgba(48,54,61,0.8);
-    border-radius: 12px;
-    background: #10141a;
-    overflow-x: auto;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.05),
+      0 40px 80px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+    background: var(--surface);
   }
+
+  /* TOP BAR */
+  .canvas-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-dots { display: flex; gap: 7px; }
+  .topbar-dots span {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: block;
+  }
+  .topbar-dots span:nth-child(1) { background: #ff5f57; }
+  .topbar-dots span:nth-child(2) { background: #febc2e; }
+  .topbar-dots span:nth-child(3) { background: #28c840; }
+  .topbar-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text-dim); letter-spacing: 1px;
+  }
+  .topbar-status {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--hw);
+  }
+  .topbar-status .led { width: 6px; height: 6px; background: var(--hw); border-radius: 50%; animation: blinkLed 2s infinite; }
+
   svg#diagram {
-    width: 1600px; /* Fixed width to maintain layout */
+    width: 1600px;
     height: 800px;
     display: block;
   }
 
-  /* ─── SVG STYLES ─── */
+  /* ── LAYER ZONE LABELS ── */
+  .zone-label { font-family: 'Oxanium', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; }
+
+  /* ── DEVICE CARDS ── */
   .dev-wrap { cursor: pointer; }
-  .dev-wrap:hover rect { filter: brightness(1.2); }
-  .clip-image { clip-path: inset(4px round 6px); }
+  .dev-wrap:hover .dev-card { filter: brightness(1.15); }
+  .dev-card { transition: filter 0.2s; }
+
+  /* ── WIRE STYLES ── */
+  .wire { fill: none; stroke-width: 2; stroke-linecap: round; }
+  .wire-hw  { stroke: var(--hw);  stroke-dasharray: 8 5; animation: dashFwd 1.4s linear infinite; }
+  .wire-hw-rev { stroke: var(--hw); stroke-dasharray: 8 5; animation: dashRev 1.4s linear infinite; }
+  .wire-mw  { stroke: var(--mw);  stroke-dasharray: 8 5; animation: dashFwd 1.4s linear infinite; }
+  .wire-mw-rev { stroke: var(--mw); stroke-dasharray: 8 5; animation: dashRev 1.4s linear infinite; }
+  .wire-bk  { stroke: var(--bk);  stroke-dasharray: 8 5; animation: dashFwd 1.4s linear infinite; }
+  .wire-solid { fill: none; stroke-width: 2; stroke-linecap: round; opacity: 0.7; }
   
-  /* Text Styles */
-  .dev-title { font-family:'Share Tech Mono',monospace; font-size:12px; font-weight:bold; dominant-baseline:middle; text-anchor:middle; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
-  .dev-sub { font-family:'Sarabun',sans-serif; font-size:10px; dominant-baseline:middle; text-anchor:middle; fill:#8b949e; }
-  .wire-label { font-family:'Share Tech Mono',monospace; font-size:10px; fill:#c9d1d9; font-weight: 600; }
-  .wire-label-bg { fill: #10141a; rx: 4; opacity: 0.85; }
+  @keyframes dashFwd { to { stroke-dashoffset: -26; } }
+  @keyframes dashRev { to { stroke-dashoffset:  26; } }
 
-  /* Wire Animations & Styles */
-  .wire { fill:none; stroke-width:2.5; stroke-linecap:round; transition: stroke-opacity 0.3s, stroke-width 0.3s; }
-  .wire-hw { stroke:#3fb950; stroke-dasharray:10 5; animation: dashFwd 1.5s linear infinite; }
-  .wire-hw-rev { stroke:#3fb950; stroke-dasharray:10 5; animation: dashRev 1.5s linear infinite; }
-  .wire-mw { stroke:#a371f7; stroke-dasharray:10 5; animation: dashFwd 1.5s linear infinite; }
-  .wire-mw-rev { stroke:#a371f7; stroke-dasharray:10 5; animation: dashRev 1.5s linear infinite; }
-  .wire-bk { stroke:#f78166; stroke-dasharray:10 5; animation: dashFwd 1.5s linear infinite; }
-  .wire-solid-hw { fill:none; stroke-width:2; stroke-linecap:round; stroke:#3fb950; opacity:0.6; transition: stroke-opacity 0.3s, stroke-width 0.3s; }
-  
-  @keyframes dashFwd { to { stroke-dashoffset: -30; } }
-  @keyframes dashRev { to { stroke-dashoffset: 30; } }
+  /* ── DATA PACKETS ── */
+  .dp { r: 4; opacity: 0; }
+  .dp-hw { fill: var(--hw);  filter: drop-shadow(0 0 4px var(--hw)); }
+  .dp-mw { fill: var(--mw);  filter: drop-shadow(0 0 4px var(--mw)); }
+  .dp-bk { fill: var(--bk);  filter: drop-shadow(0 0 4px var(--bk)); }
 
-  /* DATA PACKETS & LED STATUS */
-  .data-packet { r: 3.5; fill: #ffffff; opacity: 0; filter: drop-shadow(0 0 3px rgba(255,255,255,0.8)); }
-  .dp-hw { fill: #a7f3d0; filter: drop-shadow(0 0 3px #10b981); }
-  .dp-mw { fill: #ddd6fe; filter: drop-shadow(0 0 3px #8b5cf6); }
-  .dp-bk { fill: #fed7aa; filter: drop-shadow(0 0 3px #f97316); }
+  /* ── STATUS LEDS ── */
+  .status-led { r: 5; }
+  .led-green { fill: var(--hw); animation: blinkLed 2s infinite; filter: drop-shadow(0 0 4px var(--hw)); }
+  .led-red   { fill: var(--emg); animation: blinkLed 0.4s infinite; filter: drop-shadow(0 0 4px var(--emg)); }
+  @keyframes blinkLed { 0%,100%{opacity:1} 50%{opacity:0.25} }
 
-  .status-led { r: 5; animation: blinkLed 2s infinite; }
-  @keyframes blinkLed { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  /* ── WIRE LABELS ── */
+  .wl { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 500; }
+  .wl-bg { fill: var(--surface); opacity: 0.9; }
 
-  /* INTERACTIVE LEGEND STYLES */
+  /* ── HIGHLIGHT MODE ── */
+  svg.highlight-mode .wire,
+  svg.highlight-mode .wire-solid { stroke-opacity: 0.07; }
+  svg.highlight-mode .dp { display: none; }
+  svg.highlight-mode .highlight-active { stroke-opacity: 1 !important; stroke-width: 3px !important; filter: drop-shadow(0 0 6px currentColor); }
+
+  /* ── EMERGENCY ── */
+  body.emg-active { animation: bgEmg 0.6s infinite alternate; }
+  @keyframes bgEmg { from { background-color: var(--bg); } to { background-color: #1a0505; } }
+  .emg-active .canvas-wrap { box-shadow: 0 0 0 2px var(--emg), 0 0 60px rgba(255,43,43,0.15), inset 0 0 40px rgba(255,43,43,0.05); }
+  .emg-active .wire, .emg-active .wire-solid { animation-play-state: paused; stroke-opacity: 0.05; }
+  .emg-active .dp { display: none; }
+  .emg-active .led-green { fill: var(--emg); animation: blinkLed 0.3s infinite; }
+  .emg-active #emg-wire { stroke-width: 5; stroke-opacity: 1; stroke: var(--emg); filter: drop-shadow(0 0 10px var(--emg)); stroke-dasharray: none; animation: pulseEmg 0.3s infinite alternate; }
+  .emg-active #emg-btn-top { transform: translateY(4px); }
+  @keyframes pulseEmg { from { opacity: 1; } to { opacity: 0.3; } }
+
+  #alert-text { display: none; font-family: 'Oxanium', sans-serif; font-size: 52px; font-weight: 800; fill: var(--emg); text-anchor: middle; filter: drop-shadow(0 0 20px rgba(255,43,43,0.8)); letter-spacing: 6px; }
+  .emg-active #alert-text { display: block; animation: flashAlert 0.5s infinite alternate; }
+  @keyframes flashAlert { from{opacity:1} to{opacity:0} }
+
+  /* ── LEGEND ── */
   .legend {
-    max-width: 1400px; margin: 16px auto 0; display: flex; flex-wrap: wrap; gap: 16px; 
-    padding: 10px; position: relative; z-index: 2; justify-content: center;
+    max-width: 1640px; margin: 14px auto 0;
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    justify-content: center;
   }
-  .leg-item { 
-    display:flex; align-items:center; gap:8px; font-family:'Share Tech Mono',monospace; 
-    font-size:10px; color:#c9d1d9; cursor: pointer; padding: 4px 8px; border-radius: 4px;
-    transition: background 0.2s, transform 0.1s;
+  .leg-item {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim);
+    cursor: pointer; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s; user-select: none;
   }
-  .leg-item:hover { background: rgba(255,255,255,0.1); transform: scale(1.05); }
-  .leg-line { width:32px;height:2px; border-radius:1px; position:relative; overflow:hidden; }
-  .leg-line::after { content:''; position:absolute; inset:0; background:inherit; animation:shimmer 1.5s linear infinite; }
-  @keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+  .leg-item:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+    border-color: var(--border);
+    transform: translateY(-1px);
+  }
+  .leg-dash { width: 30px; height: 2px; display: flex; align-items: center; gap: 3px; }
+  .leg-dash span { display: block; height: 2px; border-radius: 1px; flex: 1; }
 
-  /* Highlight mode classes */
-  svg.highlight-mode .wire, svg.highlight-mode .wire-solid-hw { stroke-opacity: 0.15; }
-  svg.highlight-mode .data-packet { display: none; }
-  svg.highlight-mode .highlight-active { stroke-opacity: 1 !important; stroke-width: 3.5px !important; }
-
-  /* EMERGENCY STYLES */
-  body.emergency-active { animation: bgEmergency 1s infinite alternate; }
-  @keyframes bgEmergency { 0% { background-color: #0d1117; } 100% { background-color: #3b0d0d; } }
-  .emergency-active .canvas-wrap { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.2) inset; }
-  .emergency-active .wire, .emergency-active .wire-solid-hw { animation-play-state: paused; stroke-opacity: 0.1; }
-  .emergency-active .data-packet { display: none; }
-  
-  .emergency-active .status-led { fill: #ef4444; animation: blinkLedFast 0.3s infinite; }
-  @keyframes blinkLedFast { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-  .emergency-active #emg-wire { stroke-width: 5; stroke-opacity: 1; stroke: #ff2a2a; filter: drop-shadow(0 0 8px #ff2a2a); stroke-dasharray: none; animation: pulseWire 0.3s infinite alternate; }
-  @keyframes pulseWire { from { opacity: 1; } to { opacity: 0.4; } }
-  #emg-stop { cursor: pointer; transition: transform 0.1s ease; transform-origin: center; }
-  #emg-stop:active { transform: scale(0.95); }
-  .emergency-active #emg-button-top { fill: #7f1d1d; transform: translateY(3px); }
-  #alert-text { display: none; font-family: 'Share Tech Mono', monospace; font-size: 54px; fill: #ff2a2a; font-weight: bold; text-anchor: middle; filter: drop-shadow(0 0 15px rgba(255, 42, 42, 0.8)); }
-  .emergency-active #alert-text { display: block; animation: flashText 0.5s infinite alternate; }
-  @keyframes flashText { from { opacity: 1; } to { opacity: 0; } }
-
-  /* PRINT REPORT MODAL */
+  /* ── PRINT MODAL ── */
   .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px) saturate(0.5);
     z-index: 100; display: none; justify-content: center; align-items: center;
+    padding: 20px;
   }
-  .modal-overlay.active { display: flex; animation: fadeIn 0.3s; }
-  .modal-content {
-    background: #fdfbf7; color: #111; padding: 30px; border-radius: 4px;
-    width: 350px; font-family: 'Sarabun', sans-serif;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.8); position: relative;
-    border-top: 20px solid #ddd; border-bottom: 20px solid #ddd;
+  .modal-overlay.active { display: flex; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+  .receipt {
+    background: #fffdf9;
+    color: #1a1a1a;
+    width: 360px;
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.9);
+    position: relative;
   }
-  .modal-content::before {
-    content: ''; position: absolute; top: -20px; left: 10px; width: 330px; height: 10px;
-    background: repeating-linear-gradient(90deg, transparent, transparent 5px, #aaa 5px, #aaa 10px);
+  .receipt::before, .receipt::after {
+    content: '';
+    display: block;
+    height: 18px;
+    background: repeating-linear-gradient(-45deg, #e8e8e8 0, #e8e8e8 6px, #fffdf9 6px, #fffdf9 12px);
   }
-  .modal-header { text-align: center; border-bottom: 2px dashed #666; padding-bottom: 10px; margin-bottom: 20px; }
-  .modal-header h2 { font-size: 18px; margin: 0; font-family: 'Share Tech Mono', monospace;}
-  .modal-body p { margin: 10px 0; font-size: 15px; display: flex; justify-content: space-between; font-weight: 600;}
+  .receipt-inner { padding: 16px 24px; }
+  .receipt-logo {
+    text-align: center; padding: 10px 0 14px;
+    border-bottom: 1px dashed #bbb;
+    margin-bottom: 14px;
+  }
+  .receipt-logo h2 { font-family: 'Oxanium', sans-serif; font-size: 15px; font-weight: 800; color: #1a1a1a; margin: 0; }
+  .receipt-logo p { font-size: 9px; color: #777; letter-spacing: 1px; margin-top: 4px; }
+  .receipt-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 11px; }
+  .receipt-row .key { color: #555; }
+  .receipt-row .val { font-weight: 700; color: #111; }
+  .receipt-divider { border: none; border-top: 1px dashed #ccc; margin: 10px 0; }
+  .receipt-footer { text-align: center; font-size: 9px; color: #aaa; padding: 8px 0; border-top: 1px dashed #ccc; margin-top: 10px; letter-spacing: 1px; }
+  .receipt-barcode {
+    display: flex; justify-content: center; gap: 2px; margin: 12px 0 4px;
+  }
+  .receipt-barcode span { display: inline-block; width: 2px; background: #222; border-radius: 1px; }
   .modal-close {
-    display: block; width: 100%; padding: 10px; margin-top: 20px; background: #a371f7;
-    color: white; text-align: center; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-family: 'Share Tech Mono', monospace;
+    display: block; width: 100%; padding: 12px;
+    background: #1a1a1a; color: #fff; font-family: 'Oxanium', sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    border: none; cursor: pointer; transition: background 0.2s;
   }
-  .modal-close:hover { background: #8b5cf6; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-  #btn-print-ui { cursor: pointer; transition: filter 0.2s; }
+  .modal-close:hover { background: #333; }
+
+  #btn-print-ui { cursor: pointer; }
   #btn-print-ui:hover rect { filter: brightness(1.3); }
+
+  /* Tooltip */
+  .tooltip-wrap { pointer-events: none; }
 
 </style>
 </head>
 <body>
+<div class="grid-bg"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
 
 <div class="page">
-  <h1>Weak Leg Muscle Rehabilitation Machine</h1>
-  <div class="subtitle">System Architecture & Signal Flow Diagram</div>
-
-  <div class="canvas-wrap">
-  <svg id="diagram" viewBox="0 0 1600 800" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <marker id="arr-hw" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#3fb950"/></marker>
-      <marker id="arr-mw" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#a371f7"/></marker>
-      <marker id="arr-bk" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#f78166"/></marker>
-      <marker id="arr-emg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#ef4444"/></marker>
-      <linearGradient id="grad-card" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e232b"/><stop offset="100%" stop-color="#14181f"/></linearGradient>
-    </defs>
-
-    <rect x="20" y="20" width="560" height="760" rx="16" fill="rgba(63,185,80,0.03)" stroke="rgba(63,185,80,0.2)" stroke-width="1.5" stroke-dasharray="8 4"/>
-    <text x="300" y="50" class="dev-title" fill="#3fb950" font-size="14" letter-spacing="2">[ HARDWARE LAYER (EDGE) ]</text>
-    
-    <rect x="600" y="20" width="460" height="760" rx="16" fill="rgba(163,113,247,0.03)" stroke="rgba(163,113,247,0.2)" stroke-width="1.5" stroke-dasharray="8 4"/>
-    <text x="830" y="50" class="dev-title" fill="#a371f7" font-size="14" letter-spacing="2">[ MIDDLEWARE LAYER ]</text>
-    
-    <rect x="1080" y="20" width="500" height="760" rx="16" fill="rgba(247,129,102,0.03)" stroke="rgba(247,129,102,0.2)" stroke-width="1.5" stroke-dasharray="8 4"/>
-    <text x="1330" y="50" class="dev-title" fill="#f78166" font-size="14" letter-spacing="2">[ BACKEND & APP LAYER ]</text>
-
-    <rect x="630" y="150" width="400" height="530" rx="12" fill="#141124" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="4 4"/>
-    <rect x="630" y="150" width="400" height="40" fill="rgba(163,113,247,0.15)" style="clip-path: inset(0px 0px 0px 0px round 12px 12px 0 0);"/>
-    <text x="830" y="175" class="dev-title" fill="#a371f7" font-size="14">Raspberry Pi 5 (Middleware Host)</text>
-    <circle cx="1010" cy="170" class="status-led" fill="#10b981" />
-
-    <path id="path-analog" data-group="grp-analog" d="M220,145 C280,145 280,285 340,285" class="wire-solid-hw" marker-end="url(#arr-hw)"/>
-    <rect x="235" y="180" width="75" height="16" class="wire-label-bg"/>
-    <text x="272" y="192" class="wire-label" fill="#f87171">Analog Signal</text>
-
-    <path id="path-digital" data-group="grp-analog" d="M220,285 C280,285 280,315 340,315" class="wire-solid-hw" marker-end="url(#arr-hw)"/>
-    <rect x="230" y="290" width="80" height="16" class="wire-label-bg"/>
-    <text x="270" y="302" class="wire-label" fill="#60a5fa">Digital Pulse</text>
-
-    <path id="path-pwm" data-group="grp-pwm" d="M430,400 C430,510 140,490 140,580" class="wire-solid-hw" marker-end="url(#arr-hw)"/>
-    <rect x="230" y="495" width="60" height="16" class="wire-label-bg"/>
-    <text x="260" y="507" class="wire-label" fill="#a3e635">PWM CMD</text>
-    <path id="path-motor" data-group="grp-pwm" d="M140,580 L140,540" class="wire-solid-hw" stroke="#fbbf24" stroke-width="3" marker-end="url(#arr-hw)"/>
-
-    <path id="emg-wire" data-group="grp-emg" d="M430,580 C430,500 500,500 500,400" fill="none" stroke="#ef4444" stroke-dasharray="5 5" marker-end="url(#arr-emg)"/>
-    <rect x="425" y="475" width="75" height="16" fill="#3b0d0d" rx="4"/>
-    <text x="462" y="487" class="wire-label" fill="#ef4444">KILL Signal</text>
-
-    <path id="path-usb-out" data-group="grp-usb-data" d="M520,315 C620,315 620,550 735,550" class="wire wire-hw" marker-end="url(#arr-mw)"/>
-    <rect x="580" y="405" width="80" height="26" class="wire-label-bg"/>
-    <text x="620" y="415" class="wire-label" fill="#3fb950">USB Serial</text>
-    <text x="620" y="427" class="wire-label" fill="#3fb950">sensor_data</text>
-    
-    <path id="path-usb-in" data-group="grp-usb-cmd" d="M735,590 C600,590 600,345 525,345" class="wire wire-hw-rev" marker-end="url(#arr-hw)"/>
-    <rect x="545" y="480" width="80" height="26" class="wire-label-bg"/>
-    <text x="585" y="490" class="wire-label" fill="#3fb950">USB Serial</text>
-    <text x="585" y="502" class="wire-label" fill="#3fb950">control_cmd</text>
-
-    <path id="path-mqtt-pub" data-group="grp-mqtt" d="M810,520 L810,385" class="wire wire-mw" marker-end="url(#arr-mw)"/>
-    <rect x="755" y="435" width="50" height="16" class="wire-label-bg"/>
-    <text x="780" y="447" class="wire-label" fill="#a371f7">Publish</text>
-    
-    <path id="path-mqtt-sub" data-group="grp-mqtt" d="M850,385 L850,515" class="wire wire-mw-rev" marker-end="url(#arr-mw)"/>
-    <rect x="855" y="435" width="60" height="16" class="wire-label-bg"/>
-    <text x="885" y="447" class="wire-label" fill="#a371f7">Subscribe</text>
-
-    <path id="path-ui-sub" data-group="grp-mqtt" d="M920,300 C1040,300 1040,160 1185,160" class="wire wire-mw" marker-end="url(#arr-bk)"/>
-    <rect x="1000" y="195" width="130" height="16" class="wire-label-bg"/>
-    <text x="1065" y="207" class="wire-label" fill="#a371f7">Subscribe sensor_data</text>
-    
-    <path id="path-ui-pub" data-group="grp-mqtt" d="M1185,220 C1060,220 1060,340 925,340" class="wire wire-mw-rev" marker-end="url(#arr-mw)"/>
-    <rect x="980" y="285" width="120" height="16" class="wire-label-bg"/>
-    <text x="1040" y="297" class="wire-label" fill="#f78166">Publish control_cmd</text>
-
-    <path id="path-db-sub" data-group="grp-sql" d="M920,360 C1060,360 1060,390 1235,390" class="wire wire-bk" marker-end="url(#arr-bk)"/>
-    <rect x="1045" y="365" width="130" height="16" class="wire-label-bg"/>
-    <text x="1110" y="377" class="wire-label" fill="#a371f7">Subscribe sensor_data</text>
-
-    <path id="path-sql-ins" data-group="grp-sql" d="M1330,450 L1330,515" class="wire-solid-hw" stroke="#f78166" stroke-width="2.5" stroke-dasharray="8 4" animation="dashFwd 1.5s linear infinite" marker-end="url(#arr-bk)"/>
-    <rect x="1340" y="475" width="70" height="16" class="wire-label-bg"/>
-    <text x="1375" y="487" class="wire-label" fill="#f78166">SQL INSERT</text>
-
-    <circle class="data-packet dp-hw"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#path-analog"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.5s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-hw"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#path-digital"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-hw"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#path-usb-out"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-mw"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#path-mqtt-pub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-mw"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#path-ui-sub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-bk"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#path-db-sub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-bk"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#path-ui-pub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite"/></circle>
-    <circle class="data-packet dp-hw"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#path-usb-in"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite"/></circle>
-
-
-    <g id="heart-sensor">
-      <rect x="60" y="100" width="160" height="90" rx="8" fill="#ffffff" stroke="#f87171" stroke-width="2"/>
-      <image href="https://www.makerfabs.com/media/catalog/product/cache/5082619e83af502b1cf28572733576a0/p/u/pulse_sensor_1.jpg" x="70" y="105" width="140" height="55" preserveAspectRatio="xMidYMid meet" class="clip-image" />
-      <rect x="60" y="165" width="160" height="25" fill="#2e1a1c" style="clip-path: inset(0px 0px 0px 0px round 0 0 8px 8px);"/>
-      <text x="140" y="177" class="dev-title" fill="#f87171">Heart Rate</text>
-      <text x="140" y="187" class="dev-sub">Pulse Sensor</text>
-    </g>
-
-    <g id="prox-sensor">
-      <rect x="60" y="240" width="160" height="90" rx="8" fill="#ffffff" stroke="#60a5fa" stroke-width="2"/>
-      <image href="https://cdn.whadda.com/wp-content/uploads/2021/05/18101608/wpse476.jpg" x="70" y="245" width="140" height="55" preserveAspectRatio="xMidYMid meet" class="clip-image" />
-      <rect x="60" y="305" width="160" height="25" fill="#1a242e" style="clip-path: inset(0px 0px 0px 0px round 0 0 8px 8px);"/>
-      <text x="140" y="317" class="dev-title" fill="#60a5fa">Proximity</text>
-      <text x="140" y="327" class="dev-sub">HC-SR04 Sensor</text>
-    </g>
-
-    <g id="dc-motor">
-      <rect x="60" y="440" width="160" height="100" rx="8" fill="#ffffff" stroke="#fbbf24" stroke-width="2"/>
-      <image href="https://inwfile.com/s-h/d1zv8t.jpg" x="70" y="445" width="140" height="65" preserveAspectRatio="xMidYMid meet" class="clip-image" />
-      <rect x="60" y="515" width="160" height="25" fill="#2e2a1a" style="clip-path: inset(0px 0px 0px 0px round 0 0 8px 8px);"/>
-      <text x="140" y="527" class="dev-title" fill="#fbbf24">DC Motor 24V</text>
-      <text x="140" y="537" class="dev-sub">350W - Geared</text>
-    </g>
-
-    <g id="motor-driver">
-      <rect x="60" y="580" width="160" height="90" rx="8" fill="#ffffff" stroke="#a3e635" stroke-width="2"/>
-      <image href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSi6YBIWPeLMI2qdSrbkKyt0YAO0_LxESMElg&s" x="70" y="585" width="140" height="55" preserveAspectRatio="xMidYMid meet" class="clip-image"/>
-      <rect x="60" y="645" width="160" height="25" fill="#1f2e1a" style="clip-path: inset(0px 0px 0px 0px round 0 0 8px 8px);"/>
-      <text x="140" y="657" class="dev-title" fill="#a3e635">Motor Driver</text>
-      <text x="140" y="667" class="dev-sub">BTS7960 / H-Bridge</text>
-    </g>
-
-    <g id="arduino">
-      <rect x="340" y="270" width="180" height="130" rx="10" fill="#ffffff" stroke="#3fb950" stroke-width="2"/>
-      <image href="https://img.drz.lazcdn.com/static/lk/p/f1b6212c368de660b1cda87bbe1bf520.jpg_720x720q80.jpg" x="350" y="275" width="160" height="90" preserveAspectRatio="xMidYMid meet" />
-      <rect x="340" y="370" width="180" height="30" fill="#1a2e1c" style="clip-path: inset(0px 0px 0px 0px round 0 0 10px 10px);"/>
-      <text x="430" y="382" class="dev-title" fill="#3fb950">Arduino Uno ESP32</text>
-      <text x="430" y="393" class="dev-sub">Microcontroller</text>
-      <circle cx="505" cy="285" class="status-led" fill="#10b981" /> 
-    </g>
-
-    <g id="emg-stop" class="dev-wrap">
-      <rect x="375" y="580" width="110" height="90" rx="8" fill="url(#grad-card)" stroke="#ef4444" stroke-width="2"/>
-      <ellipse cx="430" cy="615" rx="25" ry="12" fill="#991b1b" stroke="#ef4444" stroke-width="1.5"/>
-      <g id="emg-button-top" style="transition: transform 0.1s;">
-          <ellipse cx="430" cy="610" rx="25" ry="14" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
-          <ellipse cx="422" cy="605" rx="10" ry="5" fill="rgba(255,255,255,0.2)"/>
-      </g>
-      <rect x="424" y="625" width="12" height="15" rx="2" fill="#6b7280"/>
-      <text x="430" y="652" class="dev-title" fill="#ef4444">Emergency</text>
-      <text x="430" y="663" class="dev-sub">CLICK TO STOP</text>
-    </g>
-
-    <g id="py-gateway">
-      <rect x="740" y="520" width="180" height="100" rx="8" fill="#ffffff" stroke="#a371f7" stroke-width="1.5"/>
-      <image href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/200px-Python-logo-notext.svg.png" x="760" y="535" width="50" height="50" preserveAspectRatio="xMidYMid meet" />
-      <rect x="740" y="520" width="180" height="100" fill="rgba(24,19,38,0.92)" rx="8"/> 
-      <text x="830" y="555" class="dev-title" fill="#a371f7" font-size="12">Python Gateway</text>
-      <text x="830" y="575" class="dev-sub">USB Serial Bridge</text>
-      <text x="830" y="595" class="dev-sub">Publish ↔ MQTT</text>
-    </g>
-
-    <g id="mqtt">
-      <rect x="740" y="270" width="180" height="110" rx="10" fill="#ffffff" stroke="#a371f7" stroke-width="1.5"/>
-      <image href="https://mqtt.org/assets/img/mqtt-logo-ver.jpg" x="780" y="280" width="100" height="55" preserveAspectRatio="xMidYMid meet" />
-      <rect x="740" y="345" width="180" height="35" fill="#1e1630" style="clip-path: inset(0px 0px 0px 0px round 0 0 10px 10px);"/>
-      <text x="830" y="362" class="dev-title" fill="#a371f7">MQTT Broker</text>
-      <text x="830" y="372" class="dev-sub">Mosquitto</text>
-    </g>
-
-    <g id="touch-ui">
-      <rect x="1190" y="100" width="280" height="190" rx="10" fill="#ffffff" stroke="#f78166" stroke-width="2"/>
-      <image href="https://img5.pic.in.th/file/secure-sv1/Screenshot-2026-03-05-193223.png" x="1195" y="105" width="270" height="150" preserveAspectRatio="xMidYMid meet" class="clip-image"/>
-      <rect x="1190" y="255" width="280" height="35" fill="#2e1a16" style="clip-path: inset(0px 0px 0px 0px round 0 0 10px 10px);"/>
-      <text x="1330" y="272" class="dev-title" fill="#f78166" font-size="14">Touch Screen UI (Dashboard)</text>
-      
-      <g id="btn-print-ui" transform="translate(1380, 260)">
-        <rect x="0" y="0" width="80" height="22" rx="4" fill="#a371f7" stroke="#ffffff" stroke-width="1"/>
-        <text x="40" y="14" font-family="Share Tech Mono, monospace" font-size="10" fill="#ffffff" text-anchor="middle" font-weight="bold">PRINT REPORT</text>
-      </g>
-    </g>
-
-    <g id="db-logger">
-      <rect x="1240" y="360" width="180" height="90" rx="8" fill="#ffffff" stroke="#f78166" stroke-width="1.5"/>
-      <image href="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/200px-Python-logo-notext.svg.png" x="1260" y="375" width="40" height="40" preserveAspectRatio="xMidYMid meet" />
-      <rect x="1240" y="360" width="180" height="90" fill="rgba(46,26,22,0.92)" rx="8"/>
-      <text x="1330" y="390" class="dev-title" fill="#f78166">Python DB Logger</text>
-      <text x="1330" y="410" class="dev-sub">Subscribe sensor_data</text>
-      <text x="1330" y="430" class="dev-sub">INSERT → SQL DB</text>
-    </g>
-
-    <g id="sql-db">
-      <rect x="1240" y="520" width="180" height="120" rx="8" fill="#ffffff" stroke="#f78166" stroke-width="2"/>
-      <image href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTfHAL9lwC3v52oaow4glc74V_u068ns3h2tg&s" x="1295" y="530" width="70" height="70" preserveAspectRatio="xMidYMid meet" />
-      <rect x="1240" y="605" width="180" height="35" fill="#2e1a16" style="clip-path: inset(0px 0px 0px 0px round 0 0 8px 8px);"/>
-      <text x="1330" y="622" class="dev-title" fill="#f78166">SQL Database</text>
-      <text x="1330" y="632" class="dev-sub">Data Storage</text>
-      <circle cx="1405" cy="535" class="status-led" fill="#10b981" />
-    </g>
-
-    <text id="alert-text" x="800" y="420">SYSTEM HALTED</text>
-  </svg>
+  
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-badge"><span class="dot"></span>SYSTEM ONLINE</div>
+    <h1>Weak Leg Muscle <span>Rehabilitation</span> Machine</h1>
+    <div class="subtitle">System Architecture &amp; Real-time Signal Flow</div>
   </div>
 
+  <!-- DIAGRAM -->
+  <div class="canvas-wrap">
+    <div class="canvas-topbar">
+      <div class="topbar-dots"><span></span><span></span><span></span></div>
+      <div class="topbar-title">rehab-system / architecture.svg</div>
+      <div class="topbar-status"><span class="led"></span>ALL NODES CONNECTED</div>
+    </div>
+
+    <svg id="diagram" viewBox="0 0 1600 800" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr-hw"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#00e5a0"/></marker>
+        <marker id="arr-mw"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#b06aff"/></marker>
+        <marker id="arr-bk"  markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#ff6b4a"/></marker>
+        <marker id="arr-emg" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#ff2b2b"/></marker>
+        <marker id="arr-yel" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#ffd166"/></marker>
+
+        <linearGradient id="card-hw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0d1a14"/><stop offset="100%" stop-color="#080f0d"/>
+        </linearGradient>
+        <linearGradient id="card-mw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#140d1e"/><stop offset="100%" stop-color="#0c0814"/>
+        </linearGradient>
+        <linearGradient id="card-bk" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e0f0a"/><stop offset="100%" stop-color="#140907"/>
+        </linearGradient>
+        <linearGradient id="card-yel" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e1a0a"/><stop offset="100%" stop-color="#141207"/>
+        </linearGradient>
+        <linearGradient id="card-red" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e0808"/><stop offset="100%" stop-color="#140505"/>
+        </linearGradient>
+        <linearGradient id="card-blue" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0a1020"/><stop offset="100%" stop-color="#070c16"/>
+        </linearGradient>
+
+        <filter id="glow-hw"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-mw"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-bk"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+
+        <clipPath id="clip-card-img-heart"><rect x="72" y="106" width="136" height="56" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-prox"><rect x="72" y="246" width="136" height="56" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-motor"><rect x="72" y="456" width="136" height="60" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-driver"><rect x="72" y="591" width="136" height="52" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-ard"><rect x="352" y="278" width="156" height="86" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-mqtt"><rect x="782" y="284" width="96" height="52" rx="4"/></clipPath>
+        <clipPath id="clip-card-img-dashboard"><rect x="1197" y="108" width="266" height="142" rx="4"/></clipPath>
+      </defs>
+
+      <!-- ═══════════════════════════════════════════════════
+           ZONE BACKGROUNDS
+      ═══════════════════════════════════════════════════ -->
+
+      <!-- HW Zone -->
+      <rect x="18" y="18" width="562" height="764" rx="14" fill="rgba(0,229,160,0.015)" stroke="rgba(0,229,160,0.12)" stroke-width="1" stroke-dasharray="6 4"/>
+      <rect x="18" y="18" width="562" height="38" rx="14" fill="rgba(0,229,160,0.04)" style="clip-path:inset(0 0 50% 0 round 14px 14px 0 0)"/>
+      <text x="299" y="43" class="zone-label" fill="rgba(0,229,160,0.5)" text-anchor="middle">HARDWARE LAYER · EDGE</text>
+
+      <!-- MW Zone -->
+      <rect x="598" y="18" width="462" height="764" rx="14" fill="rgba(176,106,255,0.015)" stroke="rgba(176,106,255,0.12)" stroke-width="1" stroke-dasharray="6 4"/>
+      <rect x="598" y="18" width="462" height="38" rx="14" fill="rgba(176,106,255,0.04)" style="clip-path:inset(0 0 50% 0 round 14px 14px 0 0)"/>
+      <text x="829" y="43" class="zone-label" fill="rgba(176,106,255,0.5)" text-anchor="middle">MIDDLEWARE LAYER</text>
+
+      <!-- BK Zone -->
+      <rect x="1078" y="18" width="504" height="764" rx="14" fill="rgba(255,107,74,0.015)" stroke="rgba(255,107,74,0.12)" stroke-width="1" stroke-dasharray="6 4"/>
+      <rect x="1078" y="18" width="504" height="38" rx="14" fill="rgba(255,107,74,0.04)" style="clip-path:inset(0 0 50% 0 round 14px 14px 0 0)"/>
+      <text x="1330" y="43" class="zone-label" fill="rgba(255,107,74,0.5)" text-anchor="middle">BACKEND &amp; APPLICATION</text>
+
+      <!-- Raspberry Pi container -->
+      <rect x="628" y="148" width="404" height="534" rx="10" fill="rgba(176,106,255,0.03)" stroke="rgba(176,106,255,0.2)" stroke-width="1" stroke-dasharray="4 3"/>
+      <rect x="628" y="148" width="404" height="32" fill="rgba(176,106,255,0.1)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+      <text x="820" y="169" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#b06aff" text-anchor="middle" letter-spacing="1">Raspberry Pi 5  —  Middleware Host</text>
+      <circle cx="1013" cy="164" class="status-led led-green"/>
+
+      <!-- ═══════════════════════════════════════════════════
+           WIRES
+      ═══════════════════════════════════════════════════ -->
+
+      <!-- Analog signal: heart → arduino -->
+      <path id="path-analog" data-group="grp-analog" d="M222,148 C282,148 282,290 342,290" class="wire wire-solid" stroke="#00e5a0" marker-end="url(#arr-hw)"/>
+      <rect x="228" y="180" width="78" height="16" rx="3" class="wl-bg"/>
+      <text x="267" y="192" class="wl" fill="#f87171" text-anchor="middle">Analog Signal</text>
+
+      <!-- Digital pulse: proximity → arduino -->
+      <path id="path-digital" data-group="grp-analog" d="M222,288 C282,288 282,318 342,318" class="wire wire-solid" stroke="#4fc3f7" marker-end="url(#arr-hw)"/>
+      <rect x="226" y="294" width="82" height="16" rx="3" class="wl-bg"/>
+      <text x="267" y="306" class="wl" fill="#4fc3f7" text-anchor="middle">Digital Pulse</text>
+
+      <!-- PWM: arduino → motor driver -->
+      <path id="path-pwm" data-group="grp-pwm" d="M432,402 C432,508 142,490 142,584" class="wire wire-solid" stroke="#00e5a0" marker-end="url(#arr-hw)"/>
+      <rect x="228" y="492" width="62" height="16" rx="3" class="wl-bg"/>
+      <text x="259" y="504" class="wl" fill="#a3e635" text-anchor="middle">PWM CMD</text>
+
+      <!-- Motor driver → DC motor -->
+      <path id="path-motor" data-group="grp-pwm" d="M142,584 L142,544" class="wire wire-solid" stroke="#ffd166" stroke-width="3" marker-end="url(#arr-yel)"/>
+
+      <!-- Emergency Kill -->
+      <path id="emg-wire" data-group="grp-emg" d="M432,580 C432,500 502,500 502,402" fill="none" stroke="#ff2b2b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr-emg)"/>
+      <rect x="424" y="476" width="78" height="16" rx="3" fill="rgba(60,8,8,0.92)"/>
+      <text x="463" y="488" class="wl" fill="#ff2b2b" text-anchor="middle">KILL Signal</text>
+
+      <!-- USB Serial out: arduino → gateway -->
+      <path id="path-usb-out" data-group="grp-usb-data" d="M522,318 C622,318 622,552 738,552" class="wire wire-hw" marker-end="url(#arr-mw)"/>
+      <rect x="580" y="394" width="84" height="28" rx="3" class="wl-bg"/>
+      <text x="622" y="405" class="wl" fill="#00e5a0" text-anchor="middle">USB Serial</text>
+      <text x="622" y="417" class="wl" fill="#00e5a0" text-anchor="middle">sensor_data ↓</text>
+
+      <!-- USB Serial in: gateway → arduino -->
+      <path id="path-usb-in" data-group="grp-usb-cmd" d="M738,592 C602,592 602,348 528,348" class="wire wire-hw-rev" marker-end="url(#arr-hw)"/>
+      <rect x="544" y="476" width="84" height="28" rx="3" class="wl-bg"/>
+      <text x="586" y="487" class="wl" fill="#00e5a0" text-anchor="middle">USB Serial</text>
+      <text x="586" y="499" class="wl" fill="#00e5a0" text-anchor="middle">control_cmd ↑</text>
+
+      <!-- MQTT publish (gateway → broker) -->
+      <path id="path-mqtt-pub" data-group="grp-mqtt" d="M812,522 L812,386" class="wire wire-mw" marker-end="url(#arr-mw)"/>
+      <rect x="754" y="436" width="54" height="16" rx="3" class="wl-bg"/>
+      <text x="781" y="448" class="wl" fill="#b06aff" text-anchor="middle">Publish</text>
+
+      <!-- MQTT subscribe (broker → gateway) -->
+      <path id="path-mqtt-sub" data-group="grp-mqtt" d="M852,386 L852,518" class="wire wire-mw-rev" marker-end="url(#arr-mw)"/>
+      <rect x="856" y="436" width="62" height="16" rx="3" class="wl-bg"/>
+      <text x="887" y="448" class="wl" fill="#b06aff" text-anchor="middle">Subscribe</text>
+
+      <!-- Broker → Dashboard (sub sensor_data) -->
+      <path id="path-ui-sub" data-group="grp-mqtt" d="M922,302 C1042,302 1042,162 1188,162" class="wire wire-mw" marker-end="url(#arr-bk)"/>
+      <rect x="996" y="194" width="132" height="16" rx="3" class="wl-bg"/>
+      <text x="1062" y="206" class="wl" fill="#b06aff" text-anchor="middle">Subscribe sensor_data</text>
+
+      <!-- Dashboard → Broker (pub control_cmd) -->
+      <path id="path-ui-pub" data-group="grp-mqtt" d="M1188,222 C1062,222 1062,342 928,342" class="wire wire-mw-rev" marker-end="url(#arr-mw)"/>
+      <rect x="980" y="283" width="120" height="16" rx="3" class="wl-bg"/>
+      <text x="1040" y="295" class="wl" fill="#ff6b4a" text-anchor="middle">Publish control_cmd</text>
+
+      <!-- Broker → DB Logger (sub sensor_data) -->
+      <path id="path-db-sub" data-group="grp-sql" d="M922,362 C1062,362 1062,392 1238,392" class="wire wire-bk" marker-end="url(#arr-bk)"/>
+      <rect x="1044" y="363" width="132" height="16" rx="3" class="wl-bg"/>
+      <text x="1110" y="375" class="wl" fill="#b06aff" text-anchor="middle">Subscribe sensor_data</text>
+
+      <!-- DB Logger → SQL (insert) -->
+      <path id="path-sql-ins" data-group="grp-sql" d="M1332,452 L1332,518" class="wire wire-bk" marker-end="url(#arr-bk)"/>
+      <rect x="1337" y="472" width="72" height="16" rx="3" class="wl-bg"/>
+      <text x="1373" y="484" class="wl" fill="#ff6b4a" text-anchor="middle">SQL INSERT</text>
+
+
+      <!-- ═══════════════════════════════════════════════════
+           DATA PACKETS
+      ═══════════════════════════════════════════════════ -->
+      <circle class="dp dp-hw"><animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#path-analog"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.6s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-hw"><animateMotion dur="2.1s" repeatCount="indefinite"><mpath href="#path-digital"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.1s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-hw"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#path-usb-out"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.2s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-hw"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.9s"><mpath href="#path-usb-in"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite" begin="0.9s"/></circle>
+      <circle class="dp dp-mw"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#path-mqtt-pub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.4s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-mw"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.5s"><mpath href="#path-mqtt-sub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite" begin="0.5s"/></circle>
+      <circle class="dp dp-mw"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#path-ui-sub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.2s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-bk"><animateMotion dur="2.0s" repeatCount="indefinite" begin="0.3s"><mpath href="#path-ui-pub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.0s" repeatCount="indefinite" begin="0.3s"/></circle>
+      <circle class="dp dp-bk"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#path-db-sub"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="1.6s" repeatCount="indefinite"/></circle>
+      <circle class="dp dp-bk"><animateMotion dur="2.0s" repeatCount="indefinite" begin="0.6s"><mpath href="#path-sql-ins"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" dur="2.0s" repeatCount="indefinite" begin="0.6s"/></circle>
+
+      <!-- ═══════════════════════════════════════════════════
+           DEVICE CARDS
+      ═══════════════════════════════════════════════════ -->
+
+      <!-- Heart Rate Sensor -->
+      <g class="dev-wrap">
+        <rect x="60" y="100" width="162" height="96" rx="10" fill="url(#card-hw)" stroke="rgba(248,113,113,0.5)" stroke-width="1.5"/>
+        <rect x="60" y="100" width="162" height="6" rx="10" fill="rgba(248,113,113,0.4)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://www.makerfabs.com/media/catalog/product/cache/5082619e83af502b1cf28572733576a0/p/u/pulse_sensor_1.jpg" x="72" y="106" width="136" height="56" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-heart)"/>
+        <rect x="60" y="162" width="162" height="34" fill="rgba(248,113,113,0.08)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="141" y="178" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#f87171" text-anchor="middle">Heart Rate Sensor</text>
+        <text x="141" y="190" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Pulse Sensor</text>
+      </g>
+
+      <!-- Proximity Sensor -->
+      <g class="dev-wrap">
+        <rect x="60" y="240" width="162" height="96" rx="10" fill="url(#card-blue)" stroke="rgba(79,195,247,0.5)" stroke-width="1.5"/>
+        <rect x="60" y="240" width="162" height="6" rx="10" fill="rgba(79,195,247,0.4)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://cdn.whadda.com/wp-content/uploads/2021/05/18101608/wpse476.jpg" x="72" y="246" width="136" height="56" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-prox)"/>
+        <rect x="60" y="302" width="162" height="34" fill="rgba(79,195,247,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="141" y="318" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#4fc3f7" text-anchor="middle">Proximity Sensor</text>
+        <text x="141" y="330" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">HC-SR04 Ultrasonic</text>
+      </g>
+
+      <!-- DC Motor -->
+      <g class="dev-wrap">
+        <rect x="60" y="444" width="162" height="100" rx="10" fill="url(#card-yel)" stroke="rgba(255,209,102,0.5)" stroke-width="1.5"/>
+        <rect x="60" y="444" width="162" height="6" rx="10" fill="rgba(255,209,102,0.4)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://inwfile.com/s-h/d1zv8t.jpg" x="72" y="456" width="136" height="60" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-motor)"/>
+        <rect x="60" y="510" width="162" height="34" fill="rgba(255,209,102,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="141" y="526" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#ffd166" text-anchor="middle">DC Motor 24V</text>
+        <text x="141" y="538" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">350W · Geared</text>
+      </g>
+
+      <!-- Motor Driver -->
+      <g class="dev-wrap">
+        <rect x="60" y="580" width="162" height="96" rx="10" fill="url(#card-hw)" stroke="rgba(163,230,53,0.5)" stroke-width="1.5"/>
+        <rect x="60" y="580" width="162" height="6" rx="10" fill="rgba(163,230,53,0.4)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSi6YBIWPeLMI2qdSrbkKyt0YAO0_LxESMElg&s" x="72" y="591" width="136" height="52" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-driver)"/>
+        <rect x="60" y="643" width="162" height="33" fill="rgba(163,230,53,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="141" y="659" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#a3e635" text-anchor="middle">Motor Driver</text>
+        <text x="141" y="671" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">BTS7960 / H-Bridge</text>
+      </g>
+
+      <!-- Arduino -->
+      <g class="dev-wrap">
+        <rect x="340" y="268" width="184" height="134" rx="10" fill="url(#card-hw)" stroke="rgba(0,229,160,0.4)" stroke-width="1.5"/>
+        <rect x="340" y="268" width="184" height="6" rx="10" fill="rgba(0,229,160,0.35)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://img.drz.lazcdn.com/static/lk/p/f1b6212c368de660b1cda87bbe1bf520.jpg_720x720q80.jpg" x="352" y="278" width="156" height="86" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-ard)"/>
+        <rect x="340" y="368" width="184" height="34" fill="rgba(0,229,160,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="432" y="384" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#00e5a0" text-anchor="middle">Arduino Uno / ESP32</text>
+        <text x="432" y="396" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Microcontroller</text>
+        <circle cx="507" cy="278" class="status-led led-green"/>
+      </g>
+
+      <!-- Emergency Stop Button -->
+      <g id="emg-stop" class="dev-wrap" style="cursor:pointer;">
+        <rect x="372" y="576" width="120" height="100" rx="10" fill="url(#card-red)" stroke="rgba(255,43,43,0.5)" stroke-width="1.5"/>
+        <rect x="372" y="576" width="120" height="6" rx="10" fill="rgba(255,43,43,0.4)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <!-- button body -->
+        <ellipse cx="432" cy="618" rx="26" ry="13" fill="#7f1d1d"/>
+        <g id="emg-btn-top" style="transition:transform 0.1s ease; transform-origin:432px 614px;">
+          <ellipse cx="432" cy="612" rx="26" ry="14" fill="#dc2626" stroke="#ef4444" stroke-width="1.5"/>
+          <ellipse cx="424" cy="607" rx="10" ry="5" fill="rgba(255,255,255,0.18)"/>
+        </g>
+        <rect x="426" y="626" width="12" height="14" rx="2" fill="#374151"/>
+        <text x="432" y="655" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#ef4444" text-anchor="middle">Emergency</text>
+        <text x="432" y="667" font-family="'JetBrains Mono',monospace" font-size="9" fill="#f87171" text-anchor="middle">CLICK TO STOP</text>
+      </g>
+
+      <!-- Python Gateway -->
+      <g class="dev-wrap">
+        <rect x="738" y="516" width="184" height="110" rx="10" fill="url(#card-mw)" stroke="rgba(176,106,255,0.4)" stroke-width="1.5"/>
+        <rect x="738" y="516" width="184" height="6" rx="10" fill="rgba(176,106,255,0.3)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <!-- Python icon mock -->
+        <rect x="752" y="530" width="52" height="52" rx="8" fill="rgba(176,106,255,0.1)" stroke="rgba(176,106,255,0.2)" stroke-width="1"/>
+        <text x="778" y="560" font-family="'Oxanium',sans-serif" font-size="22" font-weight="800" fill="#b06aff" text-anchor="middle">Py</text>
+        <text x="840" y="554" font-family="'Oxanium',sans-serif" font-size="12" font-weight="700" fill="#b06aff" text-anchor="middle">Python Gateway</text>
+        <text x="840" y="570" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">USB Serial Bridge</text>
+        <text x="840" y="585" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Publish ↔ MQTT</text>
+        <text x="840" y="600" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">pyserial · paho-mqtt</text>
+      </g>
+
+      <!-- MQTT Broker -->
+      <g class="dev-wrap">
+        <rect x="738" y="268" width="184" height="114" rx="10" fill="url(#card-mw)" stroke="rgba(176,106,255,0.4)" stroke-width="1.5"/>
+        <rect x="738" y="268" width="184" height="6" rx="10" fill="rgba(176,106,255,0.3)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://mqtt.org/assets/img/mqtt-logo-ver.jpg" x="782" y="284" width="96" height="52" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-mqtt)"/>
+        <rect x="738" y="344" width="184" height="38" fill="rgba(176,106,255,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="830" y="361" font-family="'Oxanium',sans-serif" font-size="12" font-weight="700" fill="#b06aff" text-anchor="middle">MQTT Broker</text>
+        <text x="830" y="375" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Mosquitto · port 1883</text>
+      </g>
+
+      <!-- Touch Screen UI / Dashboard -->
+      <g class="dev-wrap">
+        <rect x="1188" y="96" width="284" height="200" rx="10" fill="url(#card-bk)" stroke="rgba(255,107,74,0.4)" stroke-width="1.5"/>
+        <rect x="1188" y="96" width="284" height="6" rx="10" fill="rgba(255,107,74,0.3)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <image href="https://img5.pic.in.th/file/secure-sv1/Screenshot-2026-03-05-193223.png" x="1197" y="108" width="266" height="142" preserveAspectRatio="xMidYMid meet" clip-path="url(#clip-card-img-dashboard)"/>
+        <rect x="1188" y="250" width="284" height="46" fill="rgba(255,107,74,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="1290" y="265" font-family="'Oxanium',sans-serif" font-size="12" font-weight="700" fill="#ff6b4a" text-anchor="middle">Touchscreen Dashboard</text>
+        <text x="1290" y="277" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">React UI · Live Telemetry</text>
+        <!-- Print button -->
+        <g id="btn-print-ui">
+          <rect x="1388" y="252" width="76" height="22" rx="5" fill="#b06aff" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <text x="1426" y="267" font-family="'JetBrains Mono',monospace" font-size="9" fill="#fff" text-anchor="middle" font-weight="700" letter-spacing="0.5">PRINT REPORT</text>
+        </g>
+      </g>
+
+      <!-- Python DB Logger -->
+      <g class="dev-wrap">
+        <rect x="1238" y="358" width="184" height="100" rx="10" fill="url(#card-bk)" stroke="rgba(255,107,74,0.4)" stroke-width="1.5"/>
+        <rect x="1238" y="358" width="184" height="6" rx="10" fill="rgba(255,107,74,0.3)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <rect x="1252" y="374" width="44" height="44" rx="8" fill="rgba(255,107,74,0.1)" stroke="rgba(255,107,74,0.2)" stroke-width="1"/>
+        <text x="1274" y="402" font-family="'Oxanium',sans-serif" font-size="18" font-weight="800" fill="#ff6b4a" text-anchor="middle">Py</text>
+        <text x="1360" y="392" font-family="'Oxanium',sans-serif" font-size="11" font-weight="700" fill="#ff6b4a" text-anchor="middle">Python DB Logger</text>
+        <text x="1360" y="408" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Subscribe sensor_data</text>
+        <text x="1360" y="422" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">INSERT → SQL DB</text>
+        <text x="1360" y="436" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">SQLAlchemy / SQLite</text>
+      </g>
+
+      <!-- SQL Database -->
+      <g class="dev-wrap">
+        <rect x="1238" y="516" width="184" height="130" rx="10" fill="url(#card-bk)" stroke="rgba(255,107,74,0.4)" stroke-width="1.5"/>
+        <rect x="1238" y="516" width="184" height="6" rx="10" fill="rgba(255,107,74,0.3)" style="clip-path:inset(0 0 50% 0 round 10px 10px 0 0)"/>
+        <!-- DB icon -->
+        <ellipse cx="1330" cy="558" rx="34" ry="12" fill="rgba(255,107,74,0.15)" stroke="rgba(255,107,74,0.3)" stroke-width="1"/>
+        <rect x="1296" y="558" width="68" height="30" fill="rgba(255,107,74,0.08)"/>
+        <line x1="1296" y1="558" x2="1296" y2="588" stroke="rgba(255,107,74,0.3)" stroke-width="1"/>
+        <line x1="1364" y1="558" x2="1364" y2="588" stroke="rgba(255,107,74,0.3)" stroke-width="1"/>
+        <ellipse cx="1330" cy="588" rx="34" ry="12" fill="rgba(255,107,74,0.15)" stroke="rgba(255,107,74,0.3)" stroke-width="1"/>
+        <text x="1330" y="556" font-family="'JetBrains Mono',monospace" font-size="8" fill="rgba(255,107,74,0.5)" text-anchor="middle">DB</text>
+        <rect x="1238" y="610" width="184" height="36" fill="rgba(255,107,74,0.06)" style="clip-path:inset(0 0 0 0 round 0 0 10px 10px)"/>
+        <text x="1330" y="626" font-family="'Oxanium',sans-serif" font-size="12" font-weight="700" fill="#ff6b4a" text-anchor="middle">SQL Database</text>
+        <text x="1330" y="638" font-family="'JetBrains Mono',monospace" font-size="9" fill="#5a6478" text-anchor="middle">Session Data Storage</text>
+        <circle cx="1406" cy="526" class="status-led led-green"/>
+      </g>
+
+      <!-- ALERT OVERLAY TEXT -->
+      <text id="alert-text" x="800" y="415">SYSTEM HALTED</text>
+    </svg>
+  </div>
+
+  <!-- LEGEND -->
   <div class="legend">
     <div class="leg-item" data-target="grp-analog">
-      <div class="leg-line" style="background:#3fb950;"></div> Analog / Digital Signal
+      <div class="leg-dash"><span style="background:#00e5a0"></span><span style="background:#00e5a0"></span><span style="background:#00e5a0"></span></div>
+      Analog / Digital Signal
     </div>
     <div class="leg-item" data-target="grp-pwm">
-      <div class="leg-line" style="background:#3fb950;"></div> PWM CMD & Motor
+      <div class="leg-dash"><span style="background:#00e5a0"></span><span style="background:#00e5a0"></span><span style="background:#00e5a0"></span></div>
+      PWM CMD &amp; Motor Drive
     </div>
     <div class="leg-item" data-target="grp-usb-data">
-      <div class="leg-line" style="border-top:2px dashed #3fb950;"></div> USB Serial (sensor_data)
+      <div class="leg-dash"><span style="background:#00e5a0"></span><span style="background:transparent"></span><span style="background:#00e5a0"></span></div>
+      USB Serial → sensor_data
     </div>
     <div class="leg-item" data-target="grp-usb-cmd">
-      <div class="leg-line" style="border-top:2px dashed #3fb950;"></div> USB Serial (control_cmd ←)
+      <div class="leg-dash"><span style="background:#00e5a0"></span><span style="background:transparent"></span><span style="background:#00e5a0"></span></div>
+      USB Serial ← control_cmd
     </div>
     <div class="leg-item" data-target="grp-mqtt">
-      <div class="leg-line" style="border-top:2px dashed #a371f7;"></div> MQTT Publish/Subscribe
+      <div class="leg-dash"><span style="background:#b06aff"></span><span style="background:transparent"></span><span style="background:#b06aff"></span></div>
+      MQTT Publish / Subscribe
     </div>
     <div class="leg-item" data-target="grp-sql">
-      <div class="leg-line" style="border-top:2px dashed #f78166;"></div> SQL Insert / Backend
+      <div class="leg-dash"><span style="background:#ff6b4a"></span><span style="background:transparent"></span><span style="background:#ff6b4a"></span></div>
+      SQL Insert / Backend
     </div>
     <div class="leg-item" data-target="grp-emg">
-      <div class="leg-line" style="border-top:2px dashed #ef4444;"></div> Emergency Kill Signal
+      <div class="leg-dash"><span style="background:#ff2b2b"></span><span style="background:transparent"></span><span style="background:#ff2b2b"></span></div>
+      Emergency Kill Signal
     </div>
   </div>
 
 </div>
 
+<!-- PRINT MODAL -->
 <div class="modal-overlay" id="print-modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>รายงานผลกายภาพบำบัด</h2>
-      <p style="font-size:12px; color:#666; margin-top:5px;">เครื่องฟื้นฟูกล้ามเนื้อขาอ่อนแรง</p>
+  <div class="receipt">
+    <div class="receipt-inner">
+      <div class="receipt-logo">
+        <h2>REHAB SESSION REPORT</h2>
+        <p>เครื่องฟื้นฟูกล้ามเนื้อขาอ่อนแรง</p>
+      </div>
+      <div class="receipt-row"><span class="key">วันที่ / Date</span><span class="val" id="report-date">—</span></div>
+      <hr class="receipt-divider"/>
+      <div class="receipt-row"><span class="key">ระดับความเร็ว</span><span class="val">Speed 3</span></div>
+      <div class="receipt-row"><span class="key">เวลาที่ใช้</span><span class="val">15 min 30 sec</span></div>
+      <div class="receipt-row"><span class="key">จำนวนรอบ</span><span class="val">450 รอบ</span></div>
+      <div class="receipt-row"><span class="key">Heart Rate เฉลี่ย</span><span class="val">82 BPM</span></div>
+      <hr class="receipt-divider"/>
+      <div class="receipt-barcode">
+        <script>
+          for(let i=0;i<30;i++){
+            document.currentScript.insertAdjacentHTML('beforebegin',
+              `<span style="height:${20+Math.random()*20}px;"></span>`
+            );
+          }
+        </script>
+      </div>
+      <div class="receipt-footer">เก็บใบนี้ไว้ให้แพทย์หรือนักกายภาพดูพัฒนาการ</div>
     </div>
-    <div class="modal-body">
-      <p><strong>วันที่:</strong> <span id="report-date"></span></p>
-      <hr style="border: 0; border-top: 1px dashed #ccc; margin: 15px 0;">
-      <p><strong>ระดับความเร็วที่ใช้:</strong> <span>Speed 3</span></p>
-      <p><strong>เวลาที่ใช้ไป:</strong> <span>15 นาที 30 วินาที</span></p>
-      <p><strong>จำนวนรอบที่ทำได้:</strong> <span>450 รอบ</span></p>
-      <p><strong>อัตราการเต้นหัวใจเฉลี่ย:</strong> <span>82 ครั้ง/นาที</span></p>
-      <hr style="border: 0; border-top: 1px dashed #ccc; margin: 15px 0;">
-      <p style="text-align:center; font-size:12px; margin-top:15px; color:#555; display:block;">(เก็บใบนี้ไว้ให้แพทย์หรือนักกายภาพดูพัฒนาการ)</p>
-    </div>
-    <button class="modal-close" id="btn-close-modal">ปิดรายงาน</button>
+    <button class="modal-close" id="btn-close-modal">✕ CLOSE REPORT</button>
   </div>
 </div>
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // 1. Emergency Button Logic
-    const emgButton = document.getElementById('emg-stop');
-    const body = document.body;
-    emgButton.addEventListener('click', () => {
-      body.classList.toggle('emergency-active');
+
+    // 1. Emergency Button
+    const emgBtn = document.getElementById('emg-stop');
+    emgBtn.addEventListener('click', () => {
+      document.body.classList.toggle('emg-active');
     });
 
-    // 2. Interactive Legend Logic
+    // 2. Legend Highlight
     const svg = document.getElementById('diagram');
-    const legendItems = document.querySelectorAll('.leg-item');
-    
-    legendItems.forEach(item => {
+    document.querySelectorAll('.leg-item').forEach(item => {
       item.addEventListener('mouseenter', () => {
-        const targetGroup = item.getAttribute('data-target');
-        svg.classList.add('highlight-mode'); // ทำให้เส้นอื่นจางลง
-        
-        // ทำให้เส้นที่เลือกสว่างขึ้น
-        document.querySelectorAll(`path[data-group="${targetGroup}"]`).forEach(path => {
-          path.classList.add('highlight-active');
-        });
+        const g = item.dataset.target;
+        svg.classList.add('highlight-mode');
+        svg.querySelectorAll(`path[data-group="${g}"]`).forEach(p => p.classList.add('highlight-active'));
       });
-      
       item.addEventListener('mouseleave', () => {
         svg.classList.remove('highlight-mode');
-        document.querySelectorAll('.highlight-active').forEach(path => {
-          path.classList.remove('highlight-active');
-        });
+        svg.querySelectorAll('.highlight-active').forEach(p => p.classList.remove('highlight-active'));
       });
     });
 
-    // 3. Print Report Modal Logic
-    const printBtn = document.getElementById('btn-print-ui');
+    // 3. Print Modal
     const modal = document.getElementById('print-modal');
-    const closeBtn = document.getElementById('btn-close-modal');
-    const dateSpan = document.getElementById('report-date');
-
-    printBtn.addEventListener('click', () => {
-      const today = new Date();
-      dateSpan.textContent = today.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('btn-print-ui').addEventListener('click', () => {
+      const d = new Date();
+      document.getElementById('report-date').textContent =
+        d.toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
       modal.classList.add('active');
     });
+    document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
+    modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('active'); });
 
-    closeBtn.addEventListener('click', () => {
-      modal.classList.remove('active');
-    });
-    
-    modal.addEventListener('click', (e) => {
-      if(e.target === modal) modal.classList.remove('active');
-    });
   });
 </script>
-
 </body>
 </html>
